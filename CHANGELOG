@@ -1,2 +1,8 @@
+#### Version 0.1.1
+  - Add Tap User
+    Get real user table records
+  - Add Verify User
+    Verify user againts user input password
+
 #### Version 0.1.0
   - Initial release

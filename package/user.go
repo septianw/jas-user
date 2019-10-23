@@ -56,10 +56,10 @@ type User struct {
 }
 
 type ContactType struct {
-	Firstname string `json:"firstname" binding:"required"`
-	Lastname  string `json:"lastname" binding:"required"`
-	Prefix    string `json:"prefix" binding:"required"`
-	Type      string `json:"type" binding:"required"`
+	Firstname string `json:"firstname"`
+	Lastname  string `json:"lastname"`
+	Prefix    string `json:"prefix"`
+	Type      string `json:"type"`
 }
 
 type UserOut struct {
@@ -110,8 +110,6 @@ increasing error number based on which part of code that error.
 const DATABASE_EXEC_FAIL = 2200
 const MODULE_OPERATION_FAIL = 2102
 const INPUT_VALIDATION_FAIL = 2110
-
-const VERSION = "0.1.0"
 
 var NOT_ACCEPTABLE = gin.H{"code": "NOT_ACCEPTABLE", "message": "You are trying to request something not acceptible here."}
 var NOT_FOUND = gin.H{"code": "NOT_FOUND", "message": "You are find something we can't found it here."}
@@ -209,6 +207,74 @@ VALUE ('%s', '%s', 0, %d)`, userin.Uname, encrypted, contactId)
 	lastid, err = result.LastInsertId()
 	if err != nil {
 		return 0, nil
+	}
+
+	return
+}
+
+func TapUser(id, limit, offset int64) (usrs []User, err error) {
+	var usr User
+	var sbUser strings.Builder
+
+	sbUser.WriteString("SELECT uid, uname, upass, contact_contactid FROM user WHERE deleted = 0")
+
+	if id == -1 {
+		if limit == 0 {
+			sbUser.WriteString(" LIMIT 10 OFFSET 0")
+		} else {
+			sbUser.WriteString(fmt.Sprintf(" LIMIT %d OFFSET %d", limit, offset))
+		}
+	} else {
+		if limit == 0 {
+			sbUser.WriteString(fmt.Sprintf(" AND uid = %d LIMIT 10 OFFSET 0", id))
+		} else {
+			sbUser.WriteString(fmt.Sprintf(" AND uid = %d LIMIT %d OFFSET %d", id, limit, offset))
+		}
+	}
+
+	rows, err := Query(sbUser.String())
+	if err != nil {
+		return
+	}
+
+	for rows.Next() {
+		rows.Scan(&usr.Uid, &usr.Uname, &usr.Upass, &usr.Contact_contactid)
+		usrs = append(usrs, usr)
+	}
+
+	if len(usrs) == 0 {
+		err = errors.New("User not found.")
+		return
+	}
+
+	return
+}
+
+func VerifyUser(username, hashedPassword string) (verified bool, err error) {
+	var sbUser strings.Builder
+	var encPassword string
+	verified = false
+
+	_, err = sbUser.WriteString(fmt.Sprintf(`SELECT upass FROM `+"`user`"+
+		` WHERE uname = '%s'`, username))
+	if err != nil {
+		return
+	}
+
+	rows, err := Query(sbUser.String())
+	if err != nil {
+		return
+	}
+
+	for rows.Next() {
+		rows.Scan(&encPassword)
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(encPassword), []byte(hashedPassword))
+	if err != nil {
+		return
+	} else {
+		verified = true
 	}
 
 	return

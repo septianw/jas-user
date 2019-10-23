@@ -62,6 +62,7 @@ func doTheTest(load payload, heads headers) *httptest.ResponseRecorder {
 	var router, recorder = getArm()
 
 	req, err := http.NewRequest(load.Method, load.Url, load.Body)
+	log.Printf("%+v", req)
 	handleErr(err)
 
 	if len(heads) != 0 {

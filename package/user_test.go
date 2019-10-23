@@ -92,7 +92,7 @@ func TestFindUser(t *testing.T) {
 	userin.Prefix = "ga"
 	userin.Type = "konsumen"
 
-	users, err := FindUser(userin)
+	users, err := FindUser(userfind)
 	t.Log(err)
 	t.Log(users)
 	if err != nil {
