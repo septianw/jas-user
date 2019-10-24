@@ -22,4 +22,4 @@ go build -buildmode=plugin -ldflags="-s -w" -o bungkus/user.so
 cp -Rvf LICENSE CHANGELOG  module.toml schema bungkus
 mv bungkus user
 tar zcvvf user-$WRITTENVERSION.tar.gz user
-rm -Rvf user ./module.toml ./package/version.go
+rm -Rvf user ./module.toml
