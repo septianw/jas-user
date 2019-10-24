@@ -1,85 +1,18 @@
-package main
+package user
 
 import (
+	// "log"
 	"fmt"
-	"log"
 	"testing"
 
-	"crypto/md5"
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
-
-	"github.com/gin-gonic/gin"
-
 	"os"
-	"strings"
+	"reflect"
 
-	us "github.com/septianw/jas-user/package"
 	"github.com/septianw/jas/common"
 	"github.com/septianw/jas/types"
-	"github.com/stretchr/testify/assert"
 )
 
-type header map[string]string
-type headers []header
-type payload struct {
-	Method string
-	Url    string
-	Body   io.Reader
-}
-type expectation struct {
-	Code int
-	Body string
-}
-
-type quest struct {
-	pload  payload
-	heads  headers
-	expect expectation
-}
-type quests []quest
-
-var LastPostID int64
-
-func getArm() (*gin.Engine, *httptest.ResponseRecorder) {
-	router := gin.New()
-	gin.SetMode(gin.ReleaseMode)
-	Router(router)
-
-	recorder := httptest.NewRecorder()
-	return router, recorder
-}
-
-func handleErr(err error) {
-	if err != nil {
-		log.Fatalln(err)
-	}
-}
-
-func doTheTest(load payload, heads headers) *httptest.ResponseRecorder {
-	var router, recorder = getArm()
-
-	req, err := http.NewRequest(load.Method, load.Url, load.Body)
-	log.Printf("%+v", req)
-	handleErr(err)
-
-	if len(heads) != 0 {
-		for _, head := range heads {
-			for key, value := range head {
-				req.Header.Set(key, value)
-			}
-		}
-	}
-	router.ServeHTTP(recorder, req)
-
-	return recorder
-}
-
-func SetupRouter() *gin.Engine {
-	return gin.New()
-}
+var uid int64
 
 func SetEnvironment() {
 	var rt types.Runtime
@@ -102,184 +35,167 @@ func UnsetEnvironment() {
 	os.Remove("/tmp/shinyRuntimeFile")
 }
 
-func TestPostUser(t *testing.T) {
+func TestInsertUser(t *testing.T) {
 	SetEnvironment()
 	defer UnsetEnvironment()
-	var useradd us.UserAdd
-	var userin us.UserIn
+	var userin UserAdd
+	var err error
 
-	useradd.Firstname = "Firstname for test"
-	useradd.Lastname = "Lastname for test"
-	useradd.Prefix = "Tn."
-	useradd.Type = "Konsumen"
-	useradd.Uname = "lynda.alien"
-	hashofpass := md5.Sum([]byte("newpasswordforlynda"))
-	useradd.Upass = string(hashofpass[:])
+	userin.Firstname = "wawawa"
+	userin.Lastname = "lalala"
+	userin.Prefix = "ga"
+	userin.Type = "konsumen"
+	userin.Uname = "walaga"
+	userin.Upass = "ini password saya."
 
-	userin.Firstname = useradd.Firstname
-	userin.Lastname = useradd.Lastname
-	userin.Prefix = useradd.Prefix
-	userin.Type = useradd.Type
-	userin.Uname = useradd.Uname
+	uid, err = InsertUser(userin)
 
-	useraddJson, err := json.Marshal(useradd)
-	common.ErrHandler(err)
+	t.Log(uid)
+	t.Log(err)
 
-	NewUser := strings.NewReader(string(useraddJson))
-
-	q := quest{
-		payload{"POST", "/api/v1/user/", NewUser},
-		headers{},
-		expectation{201, "contact post"},
-	}
-
-	rec := doTheTest(q.pload, q.heads)
-	t.Log(rec)
-
-	users, err := us.FindUser(userin)
-	if err != nil || len(users) == 0 {
-		t.Log(err)
-		t.Log(users)
+	if (uid == 0) && (err != nil) {
 		t.Fail()
-		return
 	}
-	t.Logf("\n%+v\n", users)
-	LastPostID = users[0].Uid
-	cjson, err := json.Marshal(users[0])
-	if err != nil {
-		t.Fail()
-		return
-	}
-
-	assert.Equal(t, q.expect.Code, rec.Code)
-	assert.Equal(t, string(cjson)+"\n", rec.Body.String())
 }
 
 func TestGetUser(t *testing.T) {
 	SetEnvironment()
 	defer UnsetEnvironment()
-
-	qs := quests{
-		quest{
-			pload:  payload{"GET", fmt.Sprintf("/api/v1/user/%d", LastPostID), nil},
-			heads:  headers{},
-			expect: expectation{200, "contact post"},
-		},
-		quest{
-			pload:  payload{"GET", "/api/v1/user/all/0/2", nil},
-			heads:  headers{},
-			expect: expectation{200, "contact post"},
-		},
+	users, err := GetUser(uid, 0, 0)
+	t.Log(err)
+	t.Log(users)
+	if err != nil {
+		t.Fail()
 	}
 
-	for _, q := range qs {
-		rec := doTheTest(q.pload, q.heads)
-		t.Log(rec)
-		if strings.Contains(q.pload.Url, "all") {
-
-			users, err := us.GetUser(-1, 2, 0)
-			if (len(users) == 0) || (err != nil) {
-				t.Logf("GetUser error: %+v %+v", users, err)
-				t.Fail()
-			}
-
-			usersJson, err := json.Marshal(users)
-			if err != nil {
-				t.Logf("GetUser error: %+v", err)
-				t.Fail()
-			}
-
-			assert.Equal(t, q.expect.Code, rec.Code)
-			assert.Equal(t, string(usersJson), strings.TrimSpace(rec.Body.String()))
-		} else {
-
-			users, err := us.GetUser(LastPostID, 0, 0)
-			if (len(users) == 0) || (err != nil) {
-				t.Logf("GetUser error: %+v %+v", users, err)
-				t.Fail()
-			}
-
-			usersJson, err := json.Marshal(users[0])
-			if err != nil {
-				t.Logf("GetUser error: %+v", err)
-				t.Fail()
-			}
-
-			assert.Equal(t, q.expect.Code, rec.Code)
-			assert.Equal(t, string(usersJson), strings.TrimSpace(rec.Body.String()))
-		}
+	users, err = GetUser(-1, 5, 0)
+	t.Log(err)
+	t.Log(users)
+	if err != nil {
+		t.Fail()
 	}
 }
 
-func TestUserPutPositive(t *testing.T) {
+func TestFindUser(t *testing.T) {
+	var userfind, userin, uout UserIn
+
 	SetEnvironment()
 	defer UnsetEnvironment()
-	var useradd us.UserUpdate
 
-	useradd.Firstname = "Johnny"
-	useradd.Lastname = "Papa"
-	useradd.Prefix = "Tn."
-	useradd.Type = "Konsumen"
-	hashofpass := md5.Sum([]byte("newpasswordforjohnny"))
-	useradd.Upass = string(hashofpass[:])
+	userfind.Firstname = "wawawa"
+	userfind.Lastname = "lalala"
+	userfind.Uname = "walaga"
 
-	useraddJson, err := json.Marshal(useradd)
+	userin.Uname = "walaga"
+	userin.Firstname = "wawawa"
+	userin.Lastname = "lalala"
+	userin.Prefix = "ga"
+	userin.Type = "konsumen"
+
+	users, err := FindUser(userfind)
+	t.Log(err)
+	t.Log(users)
 	if err != nil {
-		t.Logf("Marshaller fail: %+v", err)
-	}
-
-	UpdateUser := strings.NewReader(string(useraddJson))
-	// contactUpdatedJSON, err := json.Marshal(cpac.ContactOut{
-	// 	LastPostID,
-	// 	"Pramitha",
-	// 	"Utami",
-	// 	"Mr",
-	// 	"konsumen",
-	// })
-	// common.ErrHandler(err)
-
-	q := quest{
-		payload{"PUT", fmt.Sprintf("/api/v1/user/%d", LastPostID), UpdateUser},
-		headers{},
-		expectation{200, ""},
-	}
-
-	rec := doTheTest(q.pload, q.heads)
-	users, err := us.GetUser(LastPostID, 0, 0)
-	if (err != nil) || (len(users) == 0) {
-		t.Logf("Err, fail get User: %+v", err)
 		t.Fail()
 	}
-	usersJson, err := json.Marshal(users[0])
+	if len(users) == 0 {
+		t.Fail()
+	}
 
-	assert.Equal(t, q.expect.Code, rec.Code)
-	assert.Equal(t, string(usersJson), strings.TrimSpace(rec.Body.String()))
+	uout.Firstname = users[0].Firstname
+	uout.Lastname = users[0].Lastname
+	uout.Prefix = users[0].Prefix
+	uout.Type = users[0].Type
+	uout.Uname = users[0].Uname
+
+	t.Log(uout, userin)
+	t.Log(reflect.DeepEqual(uout, userin))
+
+	if uout != userin {
+		t.Fail()
+	}
 }
 
-func TestUserDelPositive(t *testing.T) {
+func TestUpdateUser(t *testing.T) {
 	SetEnvironment()
 	defer UnsetEnvironment()
+	var userin UserUpdate
+	var userfind UserIn
 
-	users, err := us.GetUser(LastPostID, 0, 0)
-	if err != nil {
-		t.Logf("Get user fail: %+v", err)
+	userin.Firstname = "Maybelle"
+	userin.Lastname = "Ozelia"
+	userin.Prefix = "Sir"
+	userin.Type = "wow"
+	userin.Upass = "40476a02377063c0f615375cd3f4b467"
+
+	userfind.Firstname = userin.Firstname
+	userfind.Lastname = userin.Lastname
+	userfind.Prefix = userin.Prefix
+	userfind.Type = userin.Type
+
+	raff, err := UpdateUser(uid, userin)
+	t.Log(raff)
+	t.Log(err)
+
+	users, err := GetUser(uid, 0, 0)
+
+	if (userin.Firstname != users[0].Firstname) &&
+		(userin.Lastname != users[0].Lastname) &&
+		(userin.Prefix != users[0].Prefix) &&
+		(userin.Type == users[0].Type) {
 		t.Fail()
 	}
 
-	contactUpdatedJSON, err := json.Marshal(users[0])
+	if (raff == 0) && (err != nil) {
+		t.Fail()
+	}
+}
+
+func TestSetUser(t *testing.T) {
+	SetEnvironment()
+	defer UnsetEnvironment()
+	var userin UserAdd
+
+	userin.Firstname = "Maybelle"
+	userin.Lastname = "manoria"
+	userin.Prefix = "Mr"
+	userin.Type = "wow"
+	userin.Upass = "40476a02377063c0f615375cd3f4b467"
+
+	id, err := SetUser(userin)
+	t.Log(id)
+	t.Log(err)
+
+	if (id == 0) && (err != nil) {
+		t.Fail()
+	}
+}
+
+func TestDelUser(t *testing.T) {
+	SetEnvironment()
+	defer UnsetEnvironment()
+	var deleted int64
+
+	user, err := DelUser(uid)
+
 	if err != nil {
-		t.Logf("Marshall error: %+v", err)
+		t.Log(err)
 		t.Fail()
 	}
 
-	q := quest{
-		payload{"DELETE", fmt.Sprintf("/api/v1/user/%d", LastPostID), nil},
-		headers{},
-		expectation{200, string(contactUpdatedJSON)},
+	users, err := GetUser(user.Uid, 0, 0)
+	if len(users) > 0 {
+		t.Fail()
 	}
 
-	rec := doTheTest(q.pload, q.heads)
+	q := fmt.Sprintf(`select deleted from user where uid = %d`, user.Uid)
+	rows, err := Query(q)
+	for rows.Next() {
+		rows.Scan(&deleted)
+	}
 
-	assert.Equal(t, q.expect.Code, rec.Code)
-	assert.Equal(t, q.expect.Body, strings.TrimSpace(rec.Body.String()))
+	if deleted == 0 {
+		t.Log(deleted)
+		t.Fail()
+	}
 }
